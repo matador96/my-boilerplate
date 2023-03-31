@@ -1,11 +1,8 @@
 FROM node:14 as build
 
-
 # Backend
-# Create app directory
 WORKDIR /usr/src/app
 
-# Install app dependencies
 COPY . .
 
 WORKDIR /usr/src/app/backend
