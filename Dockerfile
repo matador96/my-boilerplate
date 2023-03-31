@@ -1,15 +1,27 @@
-FROM node:14
+FROM node:14 as build
 
+
+# Backend
 # Create app directory
 WORKDIR /usr/src/app
 
 # Install app dependencies
-COPY package.json ./
+COPY . .
+
+WORKDIR /usr/src/app/backend
 RUN npm install
 
-# Bundle app source
-COPY . .
+CMD [ "node", "server.js" ]
 
 EXPOSE 8080
 
-CMD [ "node", "app.js" ]
+#Frontend
+WORKDIR /usr/src/app/frontend
+RUN npm install
+RUN npm run build
+
+#Nginx
+FROM nginx
+RUN rm /usr/share/nginx/html/*
+COPY /nginx/default.conf /etc/nginx/conf.d/default.conf
+CMD ["nginx", "-g", "daemon off;"]
