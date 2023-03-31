@@ -1,0 +1,60 @@
+.publish:
+  stage: publish
+  dependencies: []
+
+.docker:
+  extends: .publish
+  image: $DOCKER_IMAGE
+  variables:
+    DOCKER_BUILDKIT: "1"
+  before_script:
+    - cp $REGISTRY_TOKEN key.json
+    - cat key.json | docker login
+      --username $REGISTRY_USER
+      --password-stdin
+      $REGISTRY_ENDPOINT_BASE
+
+.preview:
+  extends: .docker
+  only:
+    refs:
+      - branches
+  except:
+    refs:
+      - tags
+  dependencies:
+    - npm preview
+  needs:
+    - npm preview
+
+.release:
+  extends: .docker
+  only:
+    refs:
+      - tags
+  except:
+    - branches
+  dependencies:
+    - npm release
+  needs:
+    - npm release
+
+publish preview:
+  extends: .preview
+  script:
+    - docker build
+      --build-arg NODE_IMAGE=$NODE_IMAGE
+      --build-arg NGINX_IMAGE=$NGINX_IMAGE
+      --build-arg DIST_DIR=$DIST_DIR
+      -t $IMAGE_TAG -f .docker/Dockerfile .
+    - docker push $IMAGE_TAG
+
+publish release:
+  extends: .release
+  script:
+    - docker build -f .docker/Dockerfile .
+      --build-arg NODE_IMAGE=$NODE_IMAGE
+      --build-arg NGINX_IMAGE=$NGINX_IMAGE
+      --build-arg DIST_DIR=$DIST_DIR
+      --tag $IMAGE_TAG
+    - docker push $IMAGE_TAG

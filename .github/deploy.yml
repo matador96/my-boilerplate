@@ -1,0 +1,79 @@
+deploy preview:
+  stage: deploy
+  image: $HELM_IMAGE
+  only:
+    refs:
+      - branches
+  except:
+    refs:
+      - tags
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    url: http://$CI_COMMIT_REF_SLUG-$CI_PROJECT_PATH_SLUG.$NAMESPACE.outside.dev
+    on_stop: Stop
+    auto_stop_in: 3 day
+  script:
+    - helm upgrade
+      --install
+      --set registry.image="$IMAGE_TAG"
+      --set registry.secret=$REGISTRY_SECRET
+      --set release_mode=development
+      --set appBranch=$CI_COMMIT_REF_SLUG
+      --set appPath=$CI_PROJECT_PATH_SLUG
+      --set commitHash=$CI_COMMIT_SHA
+      --set-string timestamp=$(date '+%Y-%m-%d|%H:%M')
+      --set ingress.domain=$(echo $CI_ENVIRONMENT_URL | cut -d / -f3)
+      -n $KUBE_NAMESPACE
+      --atomic
+      $RELEASE_NAME
+      ./.helm
+  needs:
+    - publish preview
+
+deploy production:
+  stage: deploy
+  image: $HELM_IMAGE
+  only:
+    - tags
+  except:
+    refs:
+      - branches
+  environment:
+    name: production
+    url: http://crmautopragmat.outside.dev
+  variables:
+    RELEASE_NAME: $CI_PROJECT_PATH_SLUG-production
+  script:
+    - helm upgrade
+      --install
+      --set registry.image="$IMAGE_TAG"
+      --set registry.secret=$REGISTRY_SECRET
+      --set release_mode=production
+      --set appBranch=production
+      --set appPath=$CI_PROJECT_PATH_SLUG
+      --set commitHash=$CI_COMMIT_SHA
+      --set ingress.domain=$(echo $CI_ENVIRONMENT_URL | cut -d / -f3)
+      -n $KUBE_NAMESPACE
+      --atomic
+      $RELEASE_NAME
+      ./.helm
+  needs:
+    - publish release
+
+Stop:
+  stage: deploy
+  image: $HELM_IMAGE
+  only:
+    refs:
+      - branches
+  except:
+    refs:
+      - tags
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    action: stop
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - helm un -n $KUBE_NAMESPACE $RELEASE_NAME
+  when: manual
